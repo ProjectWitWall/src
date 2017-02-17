@@ -2910,6 +2910,16 @@ vm_map_entry_deallocate(vm_map_entry_t entry, boolean_t system_map)
 	uma_zfree(system_map ? kmapentzone : mapentzone, entry);
 }
 
+static void
+local_rwlock_debug(struct rwlock *rw, const char *file, int line)
+{
+	uintptr_t v;
+
+	v = rw->rw_lock;
+	if (RW_OWNER(v) != (uintptr_t)curthread)
+		panic("[%s:%d] bad rw %p lock value %zx curthread %p\n", file, line, rw, v, curthread);
+}
+
 /*
  *	vm_map_entry_delete:	[ internal use only ]
  *
@@ -2941,11 +2951,12 @@ vm_map_entry_delete(vm_map_t map, vm_map_entry_t entry)
 		offidxstart = OFF_TO_IDX(entry->offset);
 		offidxend = offidxstart + count;
 		VM_OBJECT_WLOCK(object);
+		local_rwlock_debug(&object->lock, __FILE__, __LINE__);
 		if (object->ref_count != 1 &&
 		    ((object->flags & (OBJ_NOSPLIT|OBJ_ONEMAPPING)) == OBJ_ONEMAPPING ||
 		    object == kernel_object || object == kmem_object)) {
 			vm_object_collapse(object);
-
+			local_rwlock_debug(&object->lock, __FILE__, __LINE__);
 			/*
 			 * The option OBJPR_NOTMAPPED can be passed here
 			 * because vm_map_delete() already performed
@@ -2954,8 +2965,10 @@ vm_map_entry_delete(vm_map_t map, vm_map_entry_t entry)
 			 */
 			vm_object_page_remove(object, offidxstart, offidxend,
 			    OBJPR_NOTMAPPED);
+			local_rwlock_debug(&object->lock, __FILE__, __LINE__);
 			if (object->type == OBJT_SWAP)
 				swap_pager_freespace(object, offidxstart, count);
+			local_rwlock_debug(&object->lock, __FILE__, __LINE__);
 			if (offidxend >= object->size &&
 			    offidxstart < object->size) {
 				size1 = object->size;
@@ -2968,7 +2981,9 @@ vm_map_entry_delete(vm_map_t map, vm_map_entry_t entry)
 					object->charge -= ptoa(size1);
 				}
 			}
+			local_rwlock_debug(&object->lock, __FILE__, __LINE__);
 		}
+		local_rwlock_debug(&object->lock, __FILE__, __LINE__);
 		VM_OBJECT_WUNLOCK(object);
 	} else
 		entry->object.vm_object = NULL;

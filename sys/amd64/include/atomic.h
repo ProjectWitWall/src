@@ -99,6 +99,7 @@ void atomic_##NAME##_barr_##TYPE(volatile u_##TYPE *p, u_##TYPE v)
 
 int	atomic_cmpset_int(volatile u_int *dst, u_int expect, u_int src);
 int	atomic_cmpset_long(volatile u_long *dst, u_long expect, u_long src);
+int     atomic_fcmpset_long(volatile u_long *dst, u_long *expect, u_long src);
 u_int	atomic_fetchadd_int(volatile u_int *p, u_int v);
 u_long	atomic_fetchadd_long(volatile u_long *p, u_long v);
 int	atomic_testandset_int(volatile u_int *p, u_int v);
@@ -194,6 +195,24 @@ atomic_cmpset_long(volatile u_long *dst, u_long expect, u_long src)
 	: "r" (src)			/* 3 */
 	: "memory", "cc");
 	return (res);
+}
+
+static __inline int
+atomic_fcmpset_long(volatile u_long *dst, u_long *expect, u_long src)
+{
+        u_char res;
+
+        __asm __volatile(
+        "       " MPLOCKED "            "
+        "       cmpxchgq %3,%1 ;        "
+        "       sete    %0 ;            "
+        "# atomic_fcmpset_long"
+        : "=r" (res),                   /* 0 */
+          "+m" (*dst),                  /* 1 */
+          "+a" (*expect)                /* 2 */
+        : "r" (src)                     /* 3 */
+        : "memory", "cc");
+        return (res);
 }
 
 /*

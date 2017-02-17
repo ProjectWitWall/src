@@ -967,12 +967,11 @@ __rw_wlock_hard(volatile uintptr_t *c, uintptr_t tid, const char *file,
  * least one thread is waiting on this lock.
  */
 void
-__rw_wunlock_hard(volatile uintptr_t *c, uintptr_t tid, const char *file,
+__rw_wunlock_hard(volatile uintptr_t *c, uintptr_t v, uintptr_t tid, const char *file,
     int line)
 {
 	struct rwlock *rw;
 	struct turnstile *ts;
-	uintptr_t v;
 	int queue;
 
 	if (SCHEDULER_STOPPED())
@@ -995,6 +994,8 @@ __rw_wunlock_hard(volatile uintptr_t *c, uintptr_t tid, const char *file,
 
 	turnstile_chain_lock(&rw->lock_object);
 	ts = turnstile_lookup(&rw->lock_object);
+	if (ts == NULL)
+		panic("lock %p tid %zx v %zx\n", rw, tid, v);
 	MPASS(ts != NULL);
 
 	/*

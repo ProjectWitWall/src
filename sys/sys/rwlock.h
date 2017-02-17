@@ -103,17 +103,22 @@
 		    0, 0, file, line, LOCKSTAT_WRITER);			\
 } while (0)
 
+#define _rw_write_unlock_fetch(rw, vp)					\
+        atomic_fcmpset_long(&(rw)->rw_lock, vp, RW_UNLOCKED)
+
 /* Release a write lock. */
 #define	__rw_wunlock(rw, tid, file, line) do {				\
 	uintptr_t _tid = (uintptr_t)(tid);				\
+	uintptr_t _v;							\
 									\
 	if ((rw)->rw_recurse)						\
 		(rw)->rw_recurse--;					\
 	else {								\
 		LOCKSTAT_PROFILE_RELEASE_RWLOCK(rw__release, rw,	\
 		    LOCKSTAT_WRITER);					\
-		if ((rw)->rw_lock != _tid || !_rw_write_unlock((rw), _tid))\
-			_rw_wunlock_hard((rw), _tid, (file), (line));	\
+		_v = (rw)->rw_lock;					\
+		if (_v != _tid || !_rw_write_unlock_fetch((rw), &_v))	\
+			_rw_wunlock_hard((rw), _v, _tid, (file), (line));\
 	}								\
 } while (0)
 
@@ -135,7 +140,7 @@ int	__rw_try_rlock(volatile uintptr_t *c, const char *file, int line);
 void	_rw_runlock_cookie(volatile uintptr_t *c, const char *file, int line);
 void	__rw_wlock_hard(volatile uintptr_t *c, uintptr_t tid, const char *file,
 	    int line);
-void	__rw_wunlock_hard(volatile uintptr_t *c, uintptr_t tid,
+void	__rw_wunlock_hard(volatile uintptr_t *c, uintptr_t v, uintptr_t tid,
 	    const char *file, int line);
 int	__rw_try_upgrade(volatile uintptr_t *c, const char *file, int line);
 void	__rw_downgrade(volatile uintptr_t *c, const char *file, int line);
@@ -171,8 +176,8 @@ void	__rw_assert(const volatile uintptr_t *c, int what, const char *file,
 	_rw_runlock_cookie(&(rw)->rw_lock, f, l)
 #define	_rw_wlock_hard(rw, t, f, l)					\
 	__rw_wlock_hard(&(rw)->rw_lock, t, f, l)
-#define	_rw_wunlock_hard(rw, t, f, l)					\
-	__rw_wunlock_hard(&(rw)->rw_lock, t, f, l)
+#define	_rw_wunlock_hard(rw, v, t, f, l)				\
+	__rw_wunlock_hard(&(rw)->rw_lock, v, t, f, l)
 #define	_rw_try_upgrade(rw, f, l)					\
 	__rw_try_upgrade(&(rw)->rw_lock, f, l)
 #define	_rw_downgrade(rw, f, l)						\
